@@ -145,6 +145,16 @@ async function main() {
   // Let's stick to generic types or check existing.
   
   for (const l of listings) {
+    // Check if listing already exists to avoid duplicates
+    const existing = await prisma.listing.findFirst({ 
+        where: { title: l.title, hostId: host.id } 
+    });
+    
+    if (existing) {
+        console.log(`Skipping existing listing: ${l.title}`);
+        continue;
+    }
+
     // Map string type to enum safely or default to HOUSE
     let pType = l.type;
     // @ts-ignore
