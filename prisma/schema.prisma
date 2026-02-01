@@ -1,0 +1,231 @@
+// Prisma schema for ASATRA - Pakistan short-term rental platform
+// Initial schema for MVP
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER MODEL
+// ============================================
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  phone         String?   @unique
+  passwordHash  String
+  name          String
+  cnic          String?   // Pakistani National ID for verification
+  cnicVerified  Boolean   @default(false)
+  role          UserRole  @default(GUEST)
+  avatarUrl     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  properties    Property[]
+  bookingsAsGuest   Booking[] @relation("GuestBookings")
+  reviewsWritten    Review[]  @relation("ReviewAuthor")
+  reviewsReceived   Review[]  @relation("ReviewSubject")
+
+  @@index([email])
+  @@index([phone])
+}
+
+enum UserRole {
+  GUEST
+  HOST
+  ADMIN
+}
+
+// ============================================
+// PROPERTY MODEL
+// ============================================
+model Property {
+  id              String   @id @default(cuid())
+  title           String
+  description     String
+  propertyType    PropertyType
+  
+  // Location
+  address         String
+  city            String
+  province        Province
+  latitude        Float?
+  longitude       Float?
+  
+  // Pricing (in PKR)
+  pricePerNight   Int
+  cleaningFee     Int      @default(0)
+  
+  // Capacity
+  maxGuests       Int
+  bedrooms        Int
+  beds            Int
+  bathrooms       Int
+  
+  // Features
+  amenities       String[] // Array of amenity codes
+  houseRules      String?
+  
+  // Settings
+  instantBook     Boolean  @default(false)
+  familyOnly      Boolean  @default(false) // Cultural filter
+  
+  // Status
+  isActive        Boolean  @default(true)
+  isVerified      Boolean  @default(false)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  hostId          String
+  host            User     @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  images          PropertyImage[]
+  bookings        Booking[]
+  reviews         Review[]
+
+  @@index([city])
+  @@index([province])
+  @@index([hostId])
+  @@index([isActive, isVerified])
+}
+
+enum PropertyType {
+  HOUSE
+  APARTMENT
+  GUEST_HOUSE
+  FARMHOUSE
+  ROOM
+  COTTAGE
+  BEACH_HUT
+}
+
+enum Province {
+  PUNJAB
+  SINDH
+  KPK
+  BALOCHISTAN
+  GILGIT_BALTISTAN
+  AJK
+  ICT
+}
+
+model PropertyImage {
+  id          String   @id @default(cuid())
+  url         String
+  caption     String?
+  order       Int      @default(0)
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([propertyId])
+}
+
+// ============================================
+// BOOKING MODEL
+// ============================================
+model Booking {
+  id              String        @id @default(cuid())
+  
+  checkIn         DateTime
+  checkOut        DateTime
+  guestCount      Int
+  
+  // Pricing breakdown (in PKR)
+  nightlyRate     Int
+  nights          Int
+  subtotal        Int
+  cleaningFee     Int
+  serviceFee      Int
+  totalAmount     Int
+  
+  // Status
+  status          BookingStatus @default(PENDING)
+  
+  // Payment
+  paymentMethod   PaymentMethod?
+  paymentStatus   PaymentStatus @default(UNPAID)
+  paidAt          DateTime?
+  
+  // Messages
+  guestMessage    String?
+  hostResponse    String?
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  guestId         String
+  guest           User          @relation("GuestBookings", fields: [guestId], references: [id])
+  propertyId      String
+  property        Property      @relation(fields: [propertyId], references: [id])
+  review          Review?
+
+  @@index([guestId])
+  @@index([propertyId])
+  @@index([status])
+  @@index([checkIn, checkOut])
+}
+
+enum BookingStatus {
+  PENDING     // Awaiting host approval
+  CONFIRMED   // Host approved
+  CANCELLED   // Cancelled by guest or host
+  COMPLETED   // Stay completed
+  REJECTED    // Host rejected
+}
+
+enum PaymentMethod {
+  JAZZCASH
+  EASYPAISA
+  BANK_TRANSFER
+  CASH_ON_ARRIVAL
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  REFUNDED
+}
+
+// ============================================
+// REVIEW MODEL
+// ============================================
+model Review {
+  id              String   @id @default(cuid())
+  
+  rating          Int      // 1-5
+  comment         String
+  
+  // Review categories (1-5)
+  cleanlinessRating   Int?
+  accuracyRating      Int?
+  communicationRating Int?
+  locationRating      Int?
+  valueRating         Int?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  authorId        String
+  author          User     @relation("ReviewAuthor", fields: [authorId], references: [id])
+  subjectId       String   // Can be host or guest being reviewed
+  subject         User     @relation("ReviewSubject", fields: [subjectId], references: [id])
+  propertyId      String
+  property        Property @relation(fields: [propertyId], references: [id])
+  bookingId       String   @unique
+  booking         Booking  @relation(fields: [bookingId], references: [id])
+
+  @@index([propertyId])
+  @@index([authorId])
+  @@index([subjectId])
+}
