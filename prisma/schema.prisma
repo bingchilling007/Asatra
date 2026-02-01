@@ -1,5 +1,4 @@
-// Prisma schema for ASATRA - Pakistan short-term rental platform
-// Initial schema for MVP
+// Prisma schema for ASATRA
 
 generator client {
   provider = "prisma-client-js"
@@ -7,11 +6,10 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ============================================
-// USER MODEL
+// USER & PROFILE
 // ============================================
 model User {
   id            String    @id @default(cuid())
@@ -19,21 +17,45 @@ model User {
   phone         String?   @unique
   passwordHash  String
   name          String
-  cnic          String?   // Pakistani National ID for verification
+  cnic          String?   // Pakistani National ID
   cnicVerified  Boolean   @default(false)
   role          UserRole  @default(GUEST)
   avatarUrl     String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  suspended     Boolean   @default(false)
 
   // Relations
-  properties    Property[]
-  bookingsAsGuest   Booking[] @relation("GuestBookings")
-  reviewsWritten    Review[]  @relation("ReviewAuthor")
-  reviewsReceived   Review[]  @relation("ReviewSubject")
+  hostProfile   HostProfile?
+  listings      Listing[]
+  bookings      Booking[] @relation("GuestBookings")
+  reviewsAuthor Review[]  @relation("ReviewAuthor")
+  reviewsSubject Review[] @relation("ReviewSubject")
+  disputes      Dispute[]
 
   @@index([email])
   @@index([phone])
+}
+
+model HostProfile {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  bio           String?
+  responseRate  Int?      // Percentage 0-100
+  responseTime  Int?      // Average minutes
+  totalReviews  Int       @default(0)
+  rating        Float?    // Aggregate rating
+  isSuperhost   Boolean   @default(false)
+  
+  // Banking (Simplified for MVP - ideally encrypted)
+  bankName      String?
+  accountNumber String?
+  ibon          String?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 enum UserRole {
@@ -43,10 +65,10 @@ enum UserRole {
 }
 
 // ============================================
-// PROPERTY MODEL
+// LISTING (ex-Property)
 // ============================================
-model Property {
-  id              String   @id @default(cuid())
+model Listing {
+  id              String       @id @default(cuid())
   title           String
   description     String
   propertyType    PropertyType
@@ -58,52 +80,57 @@ model Property {
   latitude        Float?
   longitude       Float?
   
-  // Pricing (in PKR)
+  // Pricing (PKR)
   pricePerNight   Int
-  cleaningFee     Int      @default(0)
+  cleaningFee     Int          @default(0)
   
-  // Capacity
+  // Capacity & Details
   maxGuests       Int
   bedrooms        Int
   beds            Int
   bathrooms       Int
   
   // Features
-  amenities       String[] // Array of amenity codes
+  amenities       String[]
   houseRules      String?
   
   // Settings
-  instantBook     Boolean  @default(false)
-  familyOnly      Boolean  @default(false) // Cultural filter
+  instantBook     Boolean      @default(false)
+  familyOnly      Boolean      @default(false)
+  isActive        Boolean      @default(true) 
+  isVerified      Boolean      @default(false)
   
-  // Status
-  isActive        Boolean  @default(true)
-  isVerified      Boolean  @default(false)
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  // Moderation
+  status          ListingStatus @default(PENDING)
+  adminNotes      String?
 
+  // Stats
+  avgRating       Float        @default(0)
+  reviewCount     Int          @default(0)
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
   // Relations
   hostId          String
-  host            User     @relation(fields: [hostId], references: [id], onDelete: Cascade)
-  images          PropertyImage[]
+  host            User         @relation(fields: [hostId], references: [id])
   bookings        Booking[]
   reviews         Review[]
-
+  images          ListingImage[]
+  
   @@index([city])
-  @@index([province])
+  @@index([pricePerNight])
   @@index([hostId])
-  @@index([isActive, isVerified])
 }
 
-enum PropertyType {
-  HOUSE
-  APARTMENT
-  GUEST_HOUSE
-  FARMHOUSE
-  ROOM
-  COTTAGE
-  BEACH_HUT
+model ListingImage {
+  id        String   @id @default(cuid())
+  url       String
+  caption   String?
+  order     Int      @default(0)
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 }
 
 enum Province {
@@ -112,24 +139,26 @@ enum Province {
   KPK
   BALOCHISTAN
   GILGIT_BALTISTAN
-  AJK
+  ISLAMABAD
+  AZAD_KASHMIR
   ICT
+  AJK
 }
 
-model PropertyImage {
-  id          String   @id @default(cuid())
-  url         String
-  caption     String?
-  order       Int      @default(0)
-  propertyId  String
-  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-
-  @@index([propertyId])
+enum PropertyType {
+  HOUSE
+  APARTMENT
+  GUEST_HOUSE
+  HOTEL
+  FARM_HOUSE
+  FARMHOUSE
+  BEACH_HUT
+  COTTAGE
+  ROOM
 }
 
 // ============================================
-// BOOKING MODEL
+// BOOKING & PAYMENTS
 // ============================================
 model Booking {
   id              String        @id @default(cuid())
@@ -138,7 +167,7 @@ model Booking {
   checkOut        DateTime
   guestCount      Int
   
-  // Pricing breakdown (in PKR)
+  // Financial Snapshot
   nightlyRate     Int
   nights          Int
   subtotal        Int
@@ -146,13 +175,7 @@ model Booking {
   serviceFee      Int
   totalAmount     Int
   
-  // Status
   status          BookingStatus @default(PENDING)
-  
-  // Payment
-  paymentMethod   PaymentMethod?
-  paymentStatus   PaymentStatus @default(UNPAID)
-  paidAt          DateTime?
   
   // Messages
   guestMessage    String?
@@ -164,22 +187,46 @@ model Booking {
   // Relations
   guestId         String
   guest           User          @relation("GuestBookings", fields: [guestId], references: [id])
-  propertyId      String
-  property        Property      @relation(fields: [propertyId], references: [id])
+  listingId       String
+  listing         Listing       @relation(fields: [listingId], references: [id])
+  payment         Payment?
+  dispute         Dispute?
   review          Review?
 
   @@index([guestId])
-  @@index([propertyId])
+  @@index([listingId])
   @@index([status])
-  @@index([checkIn, checkOut])
 }
 
 enum BookingStatus {
-  PENDING     // Awaiting host approval
-  CONFIRMED   // Host approved
-  CANCELLED   // Cancelled by guest or host
-  COMPLETED   // Stay completed
-  REJECTED    // Host rejected
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  REJECTED
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  
+  amount        Int
+  currency      String        @default("PKR")
+  method        PaymentMethod
+  status        PaymentStatus @default(PENDING)
+  
+  gatewayRef    String?       // External Transaction ID
+  metadata      Json?         // Gateway response payload
+  
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  bookingId     String        @unique
+  booking       Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([bookingId])
 }
 
 enum PaymentMethod {
@@ -190,14 +237,14 @@ enum PaymentMethod {
 }
 
 enum PaymentStatus {
-  UNPAID
   PENDING
-  PAID
+  COMPLETED
+  FAILED
   REFUNDED
 }
 
 // ============================================
-// REVIEW MODEL
+// REVIEWS & DISPUTES
 // ============================================
 model Review {
   id              String   @id @default(cuid())
@@ -205,12 +252,14 @@ model Review {
   rating          Int      // 1-5
   comment         String
   
-  // Review categories (1-5)
-  cleanlinessRating   Int?
-  accuracyRating      Int?
-  communicationRating Int?
-  locationRating      Int?
-  valueRating         Int?
+  // Sub-scores
+  cleanliness     Int?
+  accuracy        Int?
+  communication   Int?
+  location        Int?
+  value           Int?
+  
+  response        String?  // Host response
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -218,14 +267,51 @@ model Review {
   // Relations
   authorId        String
   author          User     @relation("ReviewAuthor", fields: [authorId], references: [id])
-  subjectId       String   // Can be host or guest being reviewed
+  subjectId       String
   subject         User     @relation("ReviewSubject", fields: [subjectId], references: [id])
-  propertyId      String
-  property        Property @relation(fields: [propertyId], references: [id])
+  
+  listingId       String
+  listing         Listing  @relation(fields: [listingId], references: [id])
+  
   bookingId       String   @unique
   booking         Booking  @relation(fields: [bookingId], references: [id])
 
-  @@index([propertyId])
+  @@index([listingId])
   @@index([authorId])
-  @@index([subjectId])
+}
+
+model Dispute {
+  id            String        @id @default(cuid())
+  category      DisputeReason
+  description   String
+  evidence      String[]      // URLs to images/docs
+  status        DisputeStatus @default(OPEN)
+  resolution    String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  bookingId     String        @unique
+  booking       Booking       @relation(fields: [bookingId], references: [id])
+  openedById    String
+  openedBy      User          @relation(fields: [openedById], references: [id])
+}
+
+enum DisputeReason {
+  DAMAGE
+  CLEANLINESS
+  MISREPRESENTATION
+  CANCELLATION
+  OTHER
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+enum ListingStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }

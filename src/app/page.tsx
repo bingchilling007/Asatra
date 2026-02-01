@@ -1,66 +1,70 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+// ASATRA Homepage
 
-export default function Home() {
+import Link from 'next/link';
+import { auth } from '@/lib/auth';
+
+export default async function HomePage() {
+  const session = await auth();
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div style={{ minHeight: 'calc(100vh - 70px)', display: 'flex', flexDirection: 'column' }}>
+
+      {/* Hero Section */}
+      <main className="container" style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        padding: 'var(--spacing-xl) var(--spacing-sm)',
+      }}>
+        <h1 style={{
+          fontSize: 'clamp(2rem, 5vw, 3.5rem)',
+          fontWeight: '800',
+          marginBottom: 'var(--spacing-md)',
+          color: 'var(--foreground)',
+          maxWidth: '800px',
+        }}>
+          Discover Unique Stays Across <span style={{ color: 'var(--secondary)' }}>Pakistan</span>
+        </h1>
+        <p style={{
+          fontSize: 'clamp(1rem, 2vw, 1.25rem)',
+          color: 'var(--muted)',
+          marginBottom: 'var(--spacing-lg)',
+          maxWidth: '600px',
+        }}>
+          Book trusted stays — verified properties, local payments, Urdu support.
+        </p>
+
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <Link
+            href="/search"
+            className="btn btn-primary"
+            style={{ fontSize: '1.1rem', padding: '0.8rem 2rem' }}
           >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            Explore Properties
+          </Link>
+          <Link
+            href="/become-host"
+            className="btn btn-secondary"
+            style={{ fontSize: '1.1rem', padding: '0.8rem 2rem' }}
           >
-            Documentation
-          </a>
+            Become a Host
+          </Link>
         </div>
       </main>
+
+      {/* Footer */}
+      <footer style={{
+        padding: 'var(--spacing-lg) 0',
+        textAlign: 'center',
+        borderTop: '1px solid var(--border)',
+        color: 'var(--muted)',
+        marginTop: 'auto'
+      }}>
+        <p>© 2026 ASATRA. Pakistan&apos;s trusted rental platform.</p>
+      </footer>
     </div>
   );
 }
